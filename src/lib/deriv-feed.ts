@@ -23,11 +23,11 @@ class DerivFeedService {
   private initDefaultPrices() {
     const now = Date.now();
     const defaults: Record<SymbolKey, { quote: number; spread: number }> = {
-      'EUR/USD': { quote: 1.09385, spread: 0.00008 },
+      'EUR/USD': { quote: 1.09350, spread: 0.00008 },
       'GBP/USD': { quote: 1.29420, spread: 0.00012 },
       'USD/JPY': { quote: 154.650, spread: 0.012 },
       'XAU/USD': { quote: 3668.50, spread: 0.35 },
-      'Volatility 100': { quote: 1689.50, spread: 0.40 },
+      'Volatility 100': { quote: 1708.50, spread: 0.40 },
     };
 
     (Object.keys(defaults) as SymbolKey[]).forEach((sym) => {
@@ -45,39 +45,40 @@ class DerivFeedService {
         direction: 'same',
       });
 
-      // Generate seed candles for each timeframe
+      // Generate seed candles ending exactly on d.quote for each timeframe
       (['1m', '2m', '3m', '5m', '15m'] as Timeframe[]).forEach((tf) => {
         this.generateInitialCandles(sym, tf, d.quote);
       });
     });
   }
 
+  // Work backwards from basePrice so candle[last].close is ALWAYS basePrice (the live price)
   private generateInitialCandles(symbol: SymbolKey, timeframe: Timeframe, basePrice: number) {
     const cfg = SUPPORTED_SYMBOLS[symbol];
     const sec = TIMEFRAME_SECONDS[timeframe];
     const count = 50;
     const nowSec = Math.floor(Date.now() / 1000);
-    const startEpoch = nowSec - count * sec;
+    const latestEpoch = Math.floor(nowSec / sec) * sec;
 
-    const candles: Candle[] = [];
-    let currentOpen = basePrice - 0.002 * basePrice;
+    const candles: Candle[] = new Array(count);
+    let currClose = basePrice;
 
-    for (let i = 0; i < count; i++) {
-      const epoch = startEpoch + i * sec;
-      const variation = (Math.random() - 0.48) * (cfg.pipScale * 10);
-      const close = Number((currentOpen + variation).toFixed(cfg.digits));
-      const high = Number((Math.max(currentOpen, close) + Math.random() * cfg.pipScale * 5).toFixed(cfg.digits));
-      const low = Number((Math.min(currentOpen, close) - Math.random() * cfg.pipScale * 5).toFixed(cfg.digits));
+    for (let i = count - 1; i >= 0; i--) {
+      const epoch = latestEpoch - (count - 1 - i) * sec;
+      const variation = (Math.random() - 0.49) * (cfg.pipScale * 6);
+      const open = Number((currClose - variation).toFixed(cfg.digits));
+      const high = Number((Math.max(open, currClose) + Math.random() * cfg.pipScale * 3).toFixed(cfg.digits));
+      const low = Number((Math.min(open, currClose) - Math.random() * cfg.pipScale * 3).toFixed(cfg.digits));
 
-      candles.push({
+      candles[i] = {
         epoch,
-        open: currentOpen,
+        open,
         high,
         low,
-        close,
-      });
+        close: currClose,
+      };
 
-      currentOpen = close;
+      currClose = open;
     }
 
     const key = `${symbol}_${timeframe}`;
@@ -89,9 +90,9 @@ class DerivFeedService {
       this.currentTicks.get(symbol) || {
         symbol,
         derivSymbol: SUPPORTED_SYMBOLS[symbol].derivSymbol,
-        quote: 1.0000,
-        bid: 0.9999,
-        ask: 1.0001,
+        quote: 1.09350,
+        bid: 1.09346,
+        ask: 1.09354,
         time: Date.now(),
         direction: 'same',
       }
@@ -100,12 +101,22 @@ class DerivFeedService {
 
   public getCandles(symbol: SymbolKey, timeframe: Timeframe): Candle[] {
     const key = `${symbol}_${timeframe}`;
+    const latestTick = this.getLatestTick(symbol);
     let candles = this.candlesMap.get(key);
+
     if (!candles || candles.length === 0) {
-      const latest = this.getLatestTick(symbol);
-      this.generateInitialCandles(symbol, timeframe, latest.quote);
+      this.generateInitialCandles(symbol, timeframe, latestTick.quote);
       candles = this.candlesMap.get(key) || [];
+    } else {
+      // Ensure the very last candle always matches latest live quote
+      const last = candles[candles.length - 1];
+      if (last && latestTick?.quote) {
+        last.close = latestTick.quote;
+        if (latestTick.quote > last.high) last.high = latestTick.quote;
+        if (latestTick.quote < last.low) last.low = latestTick.quote;
+      }
     }
+
     return candles;
   }
 
@@ -126,7 +137,7 @@ class DerivFeedService {
     }
     this.candleListeners.get(key)!.add(listener);
 
-    // Send immediate snapshot
+    // Send immediate snapshot with aligned price
     const current = this.getCandles(symbol, timeframe);
     listener(current);
 
@@ -157,7 +168,7 @@ class DerivFeedService {
       JSON.stringify({
         ticks_history: cfg.derivSymbol,
         end: 'latest',
-        count: 60,
+        count: 50,
         style: 'candles',
         granularity: granularity,
         subscribe: 1,
@@ -223,7 +234,7 @@ class DerivFeedService {
         this.isConnected = false;
         this.isConnecting = false;
         this.startFallbackSimulation();
-        setTimeout(() => this.ensureConnection(), 5000);
+        setTimeout(() => this.ensureConnection(), 4000);
       };
     } catch {
       this.isConnecting = false;
@@ -275,7 +286,7 @@ class DerivFeedService {
     this.currentTicks.set(symKey, newTick);
     this.broadcastTick(newTick);
 
-    // Update active candles with new tick
+    // Update active candles with new tick price
     this.updateCandlesWithTick(symKey, quote, derivTick.epoch || Math.floor(Date.now() / 1000));
   }
 
@@ -293,6 +304,15 @@ class DerivFeedService {
       close: c.close,
     }));
 
+    // Align latest candle with our active live tick quote
+    const latestTick = this.currentTicks.get(meta.symbol);
+    if (latestTick && cleanCandles.length > 0) {
+      const last = cleanCandles[cleanCandles.length - 1];
+      last.close = latestTick.quote;
+      if (latestTick.quote > last.high) last.high = latestTick.quote;
+      if (latestTick.quote < last.low) last.low = latestTick.quote;
+    }
+
     this.candlesMap.set(key, cleanCandles);
     this.broadcastCandles(key, cleanCandles);
   }
@@ -304,7 +324,6 @@ class DerivFeedService {
     if (!foundEntry) return;
     const [symKey] = foundEntry as [SymbolKey, typeof SUPPORTED_SYMBOLS[SymbolKey]];
 
-    // Find timeframe matching granularity
     const tfEntry = Object.entries(TIMEFRAME_SECONDS).find(([, sec]) => sec === ohlc.granularity);
     if (!tfEntry) return;
     const [timeframe] = tfEntry as [Timeframe, number];
@@ -396,7 +415,7 @@ class DerivFeedService {
       this.currentTicks.set(targetSym, updatedTick);
       this.broadcastTick(updatedTick);
       this.updateCandlesWithTick(targetSym, newQuote, Math.floor(Date.now() / 1000));
-    }, 400);
+    }, 500);
   }
 
   private broadcastTick(tick: MarketTick) {

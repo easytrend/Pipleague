@@ -35,7 +35,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
   useEffect(() => {
     if (timeframe === 'tick') return;
 
-    // Immediately load existing candles for this symbol & timeframe
+    // Load existing candles without price jump
     const initial = derivFeed.getCandles(symbol, timeframe);
     setCandles([...initial]);
 
@@ -94,21 +94,27 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
       // MODE 1: CANDLESTICK RENDERING (1m, 2m, 3m, 5m, 15m)
       // ==========================================
       if (timeframe !== 'tick' && candles.length > 0) {
-        // Show last 35 to 45 candles
-        const visibleCandles = candles.slice(-40);
+        const visibleCandles = [...candles.slice(-40)];
+
+        // Pin the latest candle to the exact current live tick quote in real time
+        if (currentTick?.quote && visibleCandles.length > 0) {
+          const last = visibleCandles[visibleCandles.length - 1];
+          last.close = currentTick.quote;
+          if (currentTick.quote > last.high) last.high = currentTick.quote;
+          if (currentTick.quote < last.low) last.low = currentTick.quote;
+        }
+
         const highs = visibleCandles.map((c) => c.high);
         const lows = visibleCandles.map((c) => c.low);
 
         let minPrice = Math.min(...lows);
         let maxPrice = Math.max(...highs);
 
-        // Include current quote
         if (currentTick?.quote) {
           if (currentTick.quote > maxPrice) maxPrice = currentTick.quote;
           if (currentTick.quote < minPrice) minPrice = currentTick.quote;
         }
 
-        // Include open trades in min/max bounds
         openTrades.forEach((t) => {
           if (t.openPrice < minPrice) minPrice = t.openPrice;
           if (t.openPrice > maxPrice) maxPrice = t.openPrice;
@@ -165,7 +171,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
         });
 
         // Draw Japanese Candlesticks
-        const rightGutter = 75; // space for price scale
+        const rightGutter = 75;
         const plotWidth = width - rightGutter - 15;
         const candleSpacing = plotWidth / visibleCandles.length;
         const candleWidth = Math.max(3, candleSpacing - 3);
@@ -180,7 +186,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           const isBullish = candle.close >= candle.open;
           const color = isBullish ? '#10b981' : '#f43f5e';
 
-          // Draw wick line
+          // Wick line
           ctx.strokeStyle = color;
           ctx.lineWidth = 1.2;
           ctx.beginPath();
@@ -188,7 +194,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           ctx.lineTo(x + candleWidth / 2, lowY);
           ctx.stroke();
 
-          // Draw candle body
+          // Candle body
           const bodyY = Math.min(openY, closeY);
           const bodyHeight = Math.max(2, Math.abs(closeY - openY));
 
