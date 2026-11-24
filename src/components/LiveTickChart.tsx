@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Candle, MarketTick, SUPPORTED_SYMBOLS, SymbolKey, Timeframe, TIMEFRAME_SECONDS, TradePosition } from '@/lib/types';
 import { derivFeed } from '@/lib/deriv-feed';
-import { BarChart3, Clock, LineChart, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, Clock, LineChart, Sparkles } from 'lucide-react';
 
 interface LiveTickChartProps {
   symbol: SymbolKey;
@@ -13,27 +13,36 @@ interface LiveTickChartProps {
 
 export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: LiveTickChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe | 'tick'>('1m');
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [secondsToNextCandle, setSecondsToNextCandle] = useState<number>(0);
+  const [candles, setCandles] = useState<Candle[]>(() => derivFeed.getCandles(symbol, '1m'));
+  const [secondsToNextCandle, setSecondsToNextCandle] = useState<number>(60);
+  const [lastTickDirection, setLastTickDirection] = useState<'up' | 'down' | 'same'>('same');
 
   const tickHistoryRef = useRef<{ price: number; time: number }[]>([]);
   const cfg = SUPPORTED_SYMBOLS[symbol];
 
-  // Record incoming ticks for tick-wave mode
+  // Record incoming ticks
   useEffect(() => {
     if (!currentTick || !currentTick.quote) return;
     const history = tickHistoryRef.current;
     history.push({ price: currentTick.quote, time: currentTick.time });
-    if (history.length > 80) history.shift();
+    if (history.length > 100) history.shift();
+    if (currentTick.direction) setLastTickDirection(currentTick.direction);
   }, [currentTick]);
 
   // Subscribe to Deriv Candlesticks for active timeframe
   useEffect(() => {
     if (timeframe === 'tick') return;
 
+    // Immediately load existing candles for this symbol & timeframe
+    const initial = derivFeed.getCandles(symbol, timeframe);
+    setCandles([...initial]);
+
     const unsub = derivFeed.subscribeCandles(symbol, timeframe, (newCandles) => {
-      setCandles([...newCandles]);
+      if (newCandles && newCandles.length > 0) {
+        setCandles([...newCandles]);
+      }
     });
 
     return () => unsub();
@@ -53,7 +62,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
     return () => clearInterval(interval);
   }, [timeframe]);
 
-  // Canvas Render Loop
+  // Canvas Render Loop with Correct DPI Scaling
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -63,35 +72,56 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
     let animationId: number;
 
     const render = () => {
-      const width = canvas.width;
-      const height = canvas.height;
-      ctx.clearRect(0, 0, width, height);
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+
+      // Ensure internal canvas size matches actual display size
+      const targetWidth = Math.floor(rect.width * dpr);
+      const targetHeight = Math.floor(rect.height * dpr);
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+
+      ctx.save();
+      ctx.clearRect(0, 0, targetWidth, targetHeight);
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
 
       // ==========================================
       // MODE 1: CANDLESTICK RENDERING (1m, 2m, 3m, 5m, 15m)
       // ==========================================
       if (timeframe !== 'tick' && candles.length > 0) {
-        const visibleCandles = candles.slice(-45); // show last 45 candles
+        // Show last 35 to 45 candles
+        const visibleCandles = candles.slice(-40);
         const highs = visibleCandles.map((c) => c.high);
         const lows = visibleCandles.map((c) => c.low);
 
         let minPrice = Math.min(...lows);
         let maxPrice = Math.max(...highs);
 
-        // Include open trades in min/max
+        // Include current quote
+        if (currentTick?.quote) {
+          if (currentTick.quote > maxPrice) maxPrice = currentTick.quote;
+          if (currentTick.quote < minPrice) minPrice = currentTick.quote;
+        }
+
+        // Include open trades in min/max bounds
         openTrades.forEach((t) => {
           if (t.openPrice < minPrice) minPrice = t.openPrice;
           if (t.openPrice > maxPrice) maxPrice = t.openPrice;
         });
 
-        const padding = Math.max((maxPrice - minPrice) * 0.12, cfg.pipScale * 6);
+        const padding = Math.max((maxPrice - minPrice) * 0.15, cfg.pipScale * 6);
         minPrice -= padding;
         maxPrice += padding;
         const priceRange = maxPrice - minPrice || 1;
 
         const getY = (val: number) => height - ((val - minPrice) / priceRange) * (height - 50) - 25;
 
-        // Draw horizontal grid lines
+        // Draw horizontal grid lines & prices
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.lineWidth = 1;
         const gridSteps = 4;
@@ -109,11 +139,11 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           ctx.fillText(gridPrice.toFixed(cfg.digits), width - 8, y - 4);
         }
 
-        // Draw Open Trade Lines
+        // Draw Open Trade Lines (BUY = green, SELL = red)
         openTrades.forEach((trade) => {
           const tradeY = getY(trade.openPrice);
           ctx.setLineDash([4, 4]);
-          ctx.strokeStyle = trade.side === 'BUY' ? 'rgba(16, 185, 129, 0.8)' : 'rgba(244, 63, 94, 0.8)';
+          ctx.strokeStyle = trade.side === 'BUY' ? 'rgba(16, 185, 129, 0.85)' : 'rgba(244, 63, 94, 0.85)';
           ctx.lineWidth = 1.5;
 
           ctx.beginPath();
@@ -123,7 +153,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           ctx.setLineDash([]);
 
           ctx.fillStyle = trade.side === 'BUY' ? '#10b981' : '#f43f5e';
-          ctx.fillRect(8, tradeY - 10, 95, 18);
+          ctx.fillRect(8, tradeY - 10, 100, 18);
           ctx.fillStyle = '#08090b';
           ctx.font = 'bold 9px ui-monospace, monospace';
           ctx.textAlign = 'left';
@@ -135,11 +165,13 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
         });
 
         // Draw Japanese Candlesticks
-        const candleWidth = Math.max(3, (width - 40) / visibleCandles.length - 3);
-        const candleSpacing = (width - 40) / visibleCandles.length;
+        const rightGutter = 75; // space for price scale
+        const plotWidth = width - rightGutter - 15;
+        const candleSpacing = plotWidth / visibleCandles.length;
+        const candleWidth = Math.max(3, candleSpacing - 3);
 
         visibleCandles.forEach((candle, idx) => {
-          const x = 20 + idx * candleSpacing;
+          const x = 15 + idx * candleSpacing;
           const openY = getY(candle.open);
           const closeY = getY(candle.close);
           const highY = getY(candle.high);
@@ -148,7 +180,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           const isBullish = candle.close >= candle.open;
           const color = isBullish ? '#10b981' : '#f43f5e';
 
-          // Draw wick (high to low)
+          // Draw wick line
           ctx.strokeStyle = color;
           ctx.lineWidth = 1.2;
           ctx.beginPath();
@@ -164,11 +196,11 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           ctx.fillRect(x, bodyY, candleWidth, bodyHeight);
         });
 
-        // Current Live Price Banner on Right Axis
+        // Live Current Price Banner on Right Axis
         if (currentTick?.quote) {
           const currentY = getY(currentTick.quote);
           ctx.setLineDash([2, 2]);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.strokeStyle = lastTickDirection === 'up' ? 'rgba(16, 185, 129, 0.7)' : 'rgba(244, 63, 94, 0.7)';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(0, currentY);
@@ -176,12 +208,15 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           ctx.stroke();
           ctx.setLineDash([]);
 
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(width - 70, currentY - 9, 68, 18);
-          ctx.strokeStyle = '#38bdf8';
-          ctx.strokeRect(width - 70, currentY - 9, 68, 18);
+          // Right Price Tag Pill
+          const tagBg = lastTickDirection === 'up' ? '#064e3b' : '#881337';
+          const tagText = lastTickDirection === 'up' ? '#34d399' : '#fb7185';
+          ctx.fillStyle = tagBg;
+          ctx.fillRect(width - 72, currentY - 10, 70, 20);
+          ctx.strokeStyle = tagText;
+          ctx.strokeRect(width - 72, currentY - 10, 70, 20);
 
-          ctx.fillStyle = '#38bdf8';
+          ctx.fillStyle = tagText;
           ctx.font = 'bold 10px ui-monospace, monospace';
           ctx.textAlign = 'right';
           ctx.fillText(currentTick.quote.toFixed(cfg.digits), width - 6, currentY + 4);
@@ -209,7 +244,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
           const priceRange = maxPrice - minPrice || 1;
           const getY = (val: number) => height - ((val - minPrice) / priceRange) * (height - 40) - 20;
 
-          // Draw Grid
+          // Grid
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
           ctx.lineWidth = 1;
           for (let i = 0; i <= 4; i++) {
@@ -225,7 +260,7 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
             ctx.fillText(gridPrice.toFixed(cfg.digits), width - 8, y - 4);
           }
 
-          // Draw Tick Wave line
+          // Line
           const stepX = width / (history.length - 1);
           ctx.beginPath();
           history.forEach((pt, idx) => {
@@ -254,34 +289,22 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
         }
       }
 
+      ctx.restore();
       animationId = requestAnimationFrame(render);
     };
 
     render();
     return () => cancelAnimationFrame(animationId);
-  }, [symbol, timeframe, candles, openTrades, currentTick, cfg]);
-
-  // Handle Resize
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * window.devicePixelRatio;
-      canvas.height = rect.height * window.devicePixelRatio;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [symbol, timeframe, candles, openTrades, currentTick, lastTickDirection, cfg]);
 
   const timeframes: (Timeframe | 'tick')[] = ['1m', '2m', '3m', '5m', '15m', 'tick'];
 
   return (
-    <div className="relative flex flex-col rounded-xl border border-arena-800 bg-arena-900/60 p-4 overflow-hidden backdrop-blur-sm">
-      {/* Chart Top Bar with Timeframe Switchers */}
+    <div
+      ref={containerRef}
+      className="relative flex flex-col rounded-xl border border-arena-800 bg-arena-900/70 p-4 overflow-hidden backdrop-blur-sm"
+    >
+      {/* Chart Top Bar with Timeframe Switchers & Live Feed Status */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-arena-800/80">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
@@ -291,8 +314,9 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
                 {cfg.category}
               </span>
             </span>
-            <span className="font-mono text-[11px] text-arena-400">
-              Deriv Feed: <span className="text-arena-300">{cfg.derivSymbol}</span>
+            <span className="font-mono text-[11px] text-arena-400 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+              Deriv Live Stream: <span className="text-arena-200 font-semibold">{cfg.derivSymbol}</span>
             </span>
           </div>
         </div>
@@ -318,7 +342,15 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
         <div className="flex items-center gap-2 font-mono">
           <div className="flex flex-col items-end rounded-lg bg-arena-850 px-2.5 py-1 border border-arena-750">
             <span className="text-[9px] uppercase tracking-wider text-arena-400">Live Quote</span>
-            <span className="text-sm font-bold text-white">
+            <span
+              className={`text-sm font-bold transition-colors duration-150 ${
+                lastTickDirection === 'up'
+                  ? 'text-emerald-400'
+                  : lastTickDirection === 'down'
+                  ? 'text-rose-400'
+                  : 'text-white'
+              }`}
+            >
               {currentTick?.quote ? currentTick.quote.toFixed(cfg.digits) : '---'}
             </span>
           </div>
@@ -344,14 +376,14 @@ export default function LiveTickChart({ symbol, currentTick, openTrades = [] }: 
             {timeframe !== 'tick' ? `${timeframe.toUpperCase()} Candlesticks` : 'Sub-second Tick Wave'}
           </span>
           {timeframe !== 'tick' && (
-            <span className="text-arena-500">
+            <span className="text-arena-400">
               &bull; Next candle in <strong className="text-white">{secondsToNextCandle}s</strong>
             </span>
           )}
         </div>
 
         <span>
-          Contract: <strong className="text-arena-200">{cfg.contractSize.toLocaleString()} units</strong> / lot
+          Spread: <strong className="text-arena-200">{cfg.defaultSpreadPips} pips</strong> &bull; Contract: {cfg.contractSize.toLocaleString()}L
         </span>
       </div>
     </div>

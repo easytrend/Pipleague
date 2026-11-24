@@ -23,130 +23,156 @@ export default function TraderCam({
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [hasVideoStream, setHasVideoStream] = useState(false);
   const [reaction, setReaction] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const activeStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
   const isA = corner === 'A';
-  const themeColor = isA ? 'emerald' : 'cyan';
 
-  // Standalone camera & mic capture for local user
-  useEffect(() => {
+  // Toggle Camera without affecting Microphone
+  const handleToggleCam = async () => {
     if (!isLocalUser || isAiBot) return;
 
-    let localStream: MediaStream | null = null;
-
-    const syncMedia = async () => {
-      if (!cameraOn && !micOn) {
-        if (mediaStream) {
-          mediaStream.getTracks().forEach((track) => track.stop());
-          setMediaStream(null);
-        }
-        return;
+    if (cameraOn) {
+      // Turn OFF camera
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getVideoTracks().forEach((track) => {
+          track.stop();
+          activeStreamRef.current?.removeTrack(track);
+        });
       }
-
+      setCameraOn(false);
+      setHasVideoStream(false);
+    } else {
+      // Turn ON camera
       try {
-        if (!mediaStream) {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: cameraOn ? { width: 640, height: 480 } : false,
-            audio: micOn,
-          });
-          setMediaStream(localStream);
-        } else {
-          // Toggle existing tracks
-          mediaStream.getVideoTracks().forEach((t) => (t.enabled = cameraOn));
-          mediaStream.getAudioTracks().forEach((t) => (t.enabled = micOn));
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        const newVideoTrack = videoStream.getVideoTracks()[0];
+
+        if (!activeStreamRef.current) {
+          activeStreamRef.current = new MediaStream();
         }
+        activeStreamRef.current.addTrack(newVideoTrack);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = activeStreamRef.current;
+          videoRef.current.play().catch(() => {});
+        }
+
+        setCameraOn(true);
+        setHasVideoStream(true);
       } catch (err) {
-        console.warn('Microphone/Camera permission denied or not available:', err);
+        console.warn('Camera access denied or unavailable:', err);
         setCameraOn(false);
+        setHasVideoStream(false);
       }
-    };
+    }
+  };
 
-    syncMedia();
+  // Toggle Microphone without affecting Camera
+  const handleToggleMic = async () => {
+    if (!isLocalUser || isAiBot) return;
 
+    if (micOn) {
+      // Turn OFF mic
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getAudioTracks().forEach((track) => {
+          track.stop();
+          activeStreamRef.current?.removeTrack(track);
+        });
+      }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      setMicOn(false);
+      setAudioLevel(0);
+    } else {
+      // Turn ON mic
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const newAudioTrack = audioStream.getAudioTracks()[0];
+
+        if (!activeStreamRef.current) {
+          activeStreamRef.current = new MediaStream();
+        }
+        activeStreamRef.current.addTrack(newAudioTrack);
+
+        // Setup Web Audio Analyser for volume indicator
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const audioCtx = new AudioCtx();
+          audioContextRef.current = audioCtx;
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          analyserRef.current = analyser;
+
+          const source = audioCtx.createMediaStreamSource(new MediaStream([newAudioTrack]));
+          source.connect(analyser);
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const checkVolume = () => {
+            if (analyserRef.current) {
+              analyserRef.current.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              const avg = sum / dataArray.length;
+              const level = Math.min(100, Math.round((avg / 128) * 100));
+              setAudioLevel(level);
+            }
+            animFrameRef.current = requestAnimationFrame(checkVolume);
+          };
+          checkVolume();
+        }
+
+        setMicOn(true);
+      } catch (err) {
+        console.warn('Microphone access denied or unavailable:', err);
+        setMicOn(false);
+        setAudioLevel(0);
+      }
+    }
+  };
+
+  // Re-bind video element if camera is active
+  useEffect(() => {
+    if (videoRef.current && activeStreamRef.current && cameraOn) {
+      videoRef.current.srcObject = activeStreamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraOn, hasVideoStream]);
+
+  // Clean up all media tracks when component unmounts
+  useEffect(() => {
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((t) => t.stop());
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
       }
     };
-  }, [cameraOn, micOn, isLocalUser, isAiBot]);
-
-  // Bind video element
-  useEffect(() => {
-    if (videoRef.current) {
-      if (mediaStream && cameraOn) {
-        videoRef.current.srcObject = mediaStream;
-      } else {
-        videoRef.current.srcObject = null;
-      }
-    }
-  }, [mediaStream, cameraOn]);
-
-  // Audio level analyzer (speech visualizer)
-  useEffect(() => {
-    if (!mediaStream || !micOn) {
-      setAudioLevel(0);
-      return;
-    }
-
-    try {
-      const audioTracks = mediaStream.getAudioTracks();
-      if (audioTracks.length === 0) return;
-
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-
-      const audioCtx = new AudioCtx();
-      audioContextRef.current = audioCtx;
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      analyserRef.current = analyser;
-
-      const source = audioCtx.createMediaStreamSource(mediaStream);
-      source.connect(analyser);
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const checkVolume = () => {
-        if (analyserRef.current) {
-          analyserRef.current.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length;
-          const level = Math.min(100, Math.round((avg / 128) * 100));
-          setAudioLevel(level);
-        }
-        animFrameRef.current = requestAnimationFrame(checkVolume);
-      };
-      checkVolume();
-
-      return () => {
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          audioContextRef.current.close().catch(() => {});
-        }
-      };
-    } catch {
-      setAudioLevel(0);
-    }
-  }, [mediaStream, micOn]);
+  }, []);
 
   // Bot simulation reactions and speaking rhythm
   useEffect(() => {
     if (!isAiBot) return;
 
-    // Simulate periodic speech & banter for opponent
     const interval = setInterval(() => {
       const isTalking = Math.random() > 0.65;
       setAudioLevel(isTalking ? Math.floor(Math.random() * 60 + 20) : 0);
 
-      // Random trade reaction emote
       if (Math.random() > 0.8) {
-        const emotes = ['🔥 Breaking out!', '📈 Long order filled', '⚡ Scalping high', '👀 Watching spread'];
+        const emotes = ['🔥 Breaking out!', '📈 Long filled', '⚡ Scalping high', '👀 Watching spread'];
         const chosen = emotes[Math.floor(Math.random() * emotes.length)];
         setReaction(chosen);
         setTimeout(() => setReaction(null), 3000);
@@ -155,9 +181,6 @@ export default function TraderCam({
 
     return () => clearInterval(interval);
   }, [isAiBot]);
-
-  const toggleCam = () => setCameraOn((prev) => !prev);
-  const toggleMic = () => setMicOn((prev) => !prev);
 
   const triggerReaction = (text: string) => {
     setReaction(text);
@@ -172,17 +195,19 @@ export default function TraderCam({
           : 'border-cyan-500/30 shadow-lg shadow-cyan-950/20'
       } ${compact ? 'h-32 sm:h-36' : 'h-44 sm:h-48'}`}
     >
-      {/* Background Video or Animated Avatar Feed */}
-      {cameraOn && mediaStream ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
-        />
-      ) : (
-        /* Standalone Streamer Avatar with Equalizer */
+      {/* Background Video (Visible when cameraOn is true) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className={`absolute inset-0 h-full w-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+          cameraOn && hasVideoStream ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      />
+
+      {/* Standalone Streamer Avatar (Visible when cameraOn is false) */}
+      {(!cameraOn || !hasVideoStream) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-arena-900 to-arena-950/95 p-3">
           <div className="relative flex items-center justify-center">
             {/* Speaking Pulsing Aura */}
@@ -211,7 +236,7 @@ export default function TraderCam({
           </div>
 
           <span className="mt-2 font-mono text-[10px] text-arena-400">
-            {isAiBot ? 'Live Video Avatar &bull; Active' : cameraOn ? 'Connecting Cam...' : 'Camera Off (Voice Ready)'}
+            {isAiBot ? 'Live Video Avatar &bull; Active' : 'Camera Off (Click Cam On below)'}
           </span>
         </div>
       )}
@@ -268,31 +293,31 @@ export default function TraderCam({
         <div className="relative z-20 flex items-center justify-between border-t border-arena-800/80 bg-arena-950/90 p-2 backdrop-blur-md">
           <div className="flex items-center gap-1.5">
             <button
-              onClick={toggleCam}
+              onClick={handleToggleCam}
               type="button"
-              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-mono font-bold transition ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold transition ${
                 cameraOn
                   ? 'bg-emerald-500 text-arena-950 shadow-md shadow-emerald-500/25'
-                  : 'bg-arena-850 text-arena-400 hover:bg-arena-800 hover:text-white'
+                  : 'bg-arena-850 text-arena-300 hover:bg-arena-800 hover:text-white'
               }`}
               title={cameraOn ? 'Turn off webcam' : 'Turn on webcam'}
             >
               {cameraOn ? <Camera className="h-3.5 w-3.5" /> : <CameraOff className="h-3.5 w-3.5" />}
-              <span className="text-[10px] hidden sm:inline">{cameraOn ? 'Cam On' : 'Cam Off'}</span>
+              <span className="text-[10px] uppercase font-bold">{cameraOn ? 'Cam On' : 'Cam Off'}</span>
             </button>
 
             <button
-              onClick={toggleMic}
+              onClick={handleToggleMic}
               type="button"
-              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-mono font-bold transition ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold transition ${
                 micOn
                   ? 'bg-cyan-500 text-arena-950 shadow-md shadow-cyan-500/25'
-                  : 'bg-arena-850 text-arena-400 hover:bg-arena-800 hover:text-white'
+                  : 'bg-arena-850 text-arena-300 hover:bg-arena-800 hover:text-white'
               }`}
               title={micOn ? 'Mute microphone' : 'Unmute microphone'}
             >
               {micOn ? <Mic className="h-3.5 w-3.5 animate-pulse" /> : <MicOff className="h-3.5 w-3.5" />}
-              <span className="text-[10px] hidden sm:inline">{micOn ? 'Mic On' : 'Muted'}</span>
+              <span className="text-[10px] uppercase font-bold">{micOn ? 'Mic On' : 'Muted'}</span>
             </button>
           </div>
 
