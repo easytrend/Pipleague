@@ -56,7 +56,7 @@ class DerivFeedService {
   private generateInitialCandles(symbol: SymbolKey, timeframe: Timeframe, basePrice: number) {
     const cfg = SUPPORTED_SYMBOLS[symbol];
     const sec = TIMEFRAME_SECONDS[timeframe];
-    const count = 50;
+    const count = 120;
     const nowSec = Math.floor(Date.now() / 1000);
     const latestEpoch = Math.floor(nowSec / sec) * sec;
 
@@ -168,7 +168,7 @@ class DerivFeedService {
       JSON.stringify({
         ticks_history: cfg.derivSymbol,
         end: 'latest',
-        count: 50,
+        count: 120,
         style: 'candles',
         granularity: granularity,
         subscribe: 1,
@@ -348,7 +348,7 @@ class DerivFeedService {
         low: ohlc.low,
         close: ohlc.close,
       });
-      if (candles.length > 70) candles.shift();
+      if (candles.length > 200) candles.shift();
     }
 
     this.candlesMap.set(key, [...candles]);
@@ -377,7 +377,7 @@ class DerivFeedService {
           low: quote,
           close: quote,
         });
-        if (candles.length > 70) candles.shift();
+        if (candles.length > 200) candles.shift();
       }
 
       this.broadcastCandles(key, [...candles]);
