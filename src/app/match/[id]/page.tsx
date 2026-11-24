@@ -8,6 +8,7 @@ import LiveTickChart from '@/components/LiveTickChart';
 import OrderPad from '@/components/OrderPad';
 import CornerCard from '@/components/CornerCard';
 import DerivModal from '@/components/DerivModal';
+import MatchRecorder from '@/components/MatchRecorder';
 import { derivFeed } from '@/lib/deriv-feed';
 import { roomManager } from '@/lib/room-store';
 import { sound } from '@/lib/audio-effects';
@@ -157,12 +158,15 @@ export default function MatchArenaPage() {
             </div>
           </div>
 
-          {/* Center Clock & Match Bell */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 rounded-xl border border-arena-750 bg-arena-850 px-4 py-2 font-mono">
+          {/* Center Clock, Video Recorder, & Match Bell */}
+          <div className="flex items-center gap-3">
+            {/* Live Video / Screen Recorder */}
+            <MatchRecorder matchTitle={room.title} isMatchEnded={room.status === 'ENDED'} />
+
+            <div className="flex items-center gap-2 rounded-xl border border-arena-750 bg-arena-850 px-3.5 py-1.5 font-mono">
               <Clock className={`h-4 w-4 ${room.timeRemaining <= 30 && room.status === 'ACTIVE' ? 'text-rose-400 animate-spin' : 'text-emerald-400'}`} />
               <span className="text-xs text-arena-400 uppercase">Clock:</span>
-              <span className={`text-base font-black ${room.timeRemaining <= 10 && room.status === 'ACTIVE' ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+              <span className={`text-sm font-black ${room.timeRemaining <= 10 && room.status === 'ACTIVE' ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
                 {timeFormatted}
               </span>
             </div>
@@ -253,7 +257,7 @@ export default function MatchArenaPage() {
       <main className="mx-auto flex-1 w-full max-w-7xl p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Live Chart + Execution Dock (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          {/* Real-Time Tick Wave Chart */}
+          {/* Real-Time Candlestick Chart (1m, 2m, 3m, 5m, 15m) */}
           <LiveTickChart
             symbol={room.symbol}
             currentTick={currentTick || derivFeed.getLatestTick(room.symbol)}
@@ -271,9 +275,9 @@ export default function MatchArenaPage() {
           />
         </div>
 
-        {/* Right Column: Ringside Corner Standings (5 cols) */}
+        {/* Right Column: Ringside Corner Standings with Trader Cams (5 cols) */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* Corner A Card */}
+          {/* Corner A Card with Live Video Cam */}
           <CornerCard
             corner={room.cornerA}
             symbol={room.symbol}
@@ -282,7 +286,7 @@ export default function MatchArenaPage() {
             onCloseTrade={handleCloseTrade}
           />
 
-          {/* Corner B Card */}
+          {/* Corner B Card with Live Video Cam */}
           <CornerCard
             corner={room.cornerB}
             symbol={room.symbol}
@@ -295,12 +299,12 @@ export default function MatchArenaPage() {
           <div className="rounded-xl border border-arena-800 bg-arena-900/40 p-4 font-mono text-xs text-arena-400 space-y-2">
             <span className="font-bold text-arena-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-emerald-400" />
-              Arena Settlement Rules
+              Live Arena Settlement Rules
             </span>
             <ul className="list-disc list-inside space-y-1 text-[11px]">
+              <li>Timeframes: Switch between <strong>1m, 2m, 3m, 5m, 15m</strong> candlesticks or Tick Wave directly on the chart.</li>
+              <li>Camera &amp; Voice: Toggle your webcam and mic in your corner to talk, banter, and react in real-time.</li>
               <li>Discipline Rule: <strong>{room.maxDrawdownPct}% peak drawdown</strong> triggers automatic buzzer knockout.</li>
-              <li>Fills occur instantly on Deriv ask (for buys) and bid (for sells).</li>
-              <li>Highest equity at zero-clock takes the championship ring.</li>
             </ul>
           </div>
         </div>

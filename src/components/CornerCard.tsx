@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { CornerState, SUPPORTED_SYMBOLS, SymbolKey } from '@/lib/types';
-import { AlertOctagon, CheckCircle2, Mic, MicOff, ShieldAlert, TrendingDown, TrendingUp, X } from 'lucide-react';
+import TraderCam from '@/components/TraderCam';
+import { AlertOctagon, CheckCircle2, ShieldAlert, X } from 'lucide-react';
 
 interface CornerCardProps {
   corner: CornerState;
@@ -18,12 +19,10 @@ export default function CornerCard({
   symbol,
   maxDrawdownPct,
   isUserCorner = false,
-  onToggleMute,
   onCloseTrade,
 }: CornerCardProps) {
   const cfg = SUPPORTED_SYMBOLS[symbol];
   const isA = corner.corner === 'A';
-  const themeColor = isA ? 'emerald' : 'cyan';
 
   const ddProgress = Math.min(100, (corner.drawdownPercent / maxDrawdownPct) * 100);
   const isDangerDD = corner.drawdownPercent >= maxDrawdownPct * 0.75;
@@ -40,7 +39,7 @@ export default function CornerCard({
     >
       {/* Knockout Overlay Banner if Eliminated */}
       {corner.isKnockedOut && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-arena-950/85 backdrop-blur-md p-4 text-center">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-xl bg-arena-950/85 backdrop-blur-md p-4 text-center">
           <AlertOctagon className="h-10 w-10 text-rose-500 animate-bounce mb-2" />
           <span className="font-mono text-base font-black uppercase tracking-wider text-rose-400">
             KNOCKED OUT
@@ -51,54 +50,16 @@ export default function CornerCard({
         </div>
       )}
 
-      {/* Corner Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-arena-800">
-        <div className="flex items-center gap-2.5">
-          <div
-            className={`flex h-7 w-7 items-center justify-center rounded-lg font-mono text-xs font-black text-arena-950 ${
-              isA ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-cyan-400 shadow-sm shadow-cyan-400/50'
-            }`}
-          >
-            {corner.corner}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-white flex items-center gap-1.5">
-              {corner.traderName}
-              {isUserCorner && (
-                <span className="rounded bg-arena-800 px-1.5 py-0.2 text-[9px] font-mono text-arena-300">
-                  YOU
-                </span>
-              )}
-            </span>
-            <span className="font-mono text-[10px] text-arena-400 uppercase">
-              Corner {corner.corner} Contender
-            </span>
-          </div>
-        </div>
-
-        {/* Audio / Mic Indicator */}
-        <div className="flex items-center gap-1.5">
-          {corner.speaking && (
-            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-400 animate-pulse border border-emerald-500/30">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              VOICE
-            </span>
-          )}
-
-          {isUserCorner && (
-            <button
-              onClick={onToggleMute}
-              className={`rounded-lg p-1.5 text-xs transition border ${
-                corner.muted
-                  ? 'border-rose-800 bg-rose-950/40 text-rose-400'
-                  : 'border-arena-700 bg-arena-800 text-arena-300 hover:text-white'
-              }`}
-              title={corner.muted ? 'Unmute Mic' : 'Mute Mic'}
-            >
-              {corner.muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-            </button>
-          )}
-        </div>
+      {/* Embedded Live Trader Video Cam & Voice */}
+      <div className="mb-3">
+        <TraderCam
+          traderName={corner.traderName}
+          corner={corner.corner}
+          isLocalUser={isUserCorner}
+          isAiBot={!isUserCorner}
+          compact={false}
+          avatarSeed={isA ? '👨‍💻' : '⚡'}
+        />
       </div>
 
       {/* Main Score Metrics Grid */}

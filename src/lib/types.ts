@@ -1,5 +1,23 @@
 export type SymbolKey = 'EUR/USD' | 'GBP/USD' | 'USD/JPY' | 'XAU/USD' | 'Volatility 100';
 
+export type Timeframe = '1m' | '2m' | '3m' | '5m' | '15m';
+
+export interface Candle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  epoch: number; // Unix timestamp in seconds
+}
+
+export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+  '1m': 60,
+  '2m': 120,
+  '3m': 180,
+  '5m': 300,
+  '15m': 900,
+};
+
 export interface SymbolConfig {
   key: SymbolKey;
   derivSymbol: string;
@@ -106,6 +124,7 @@ export interface CornerState {
   connected: boolean;
   speaking: boolean;
   muted: boolean;
+  cameraOn?: boolean;
   startingBalance: number;
   balance: number;
   equity: number;

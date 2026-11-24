@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import LiveTickChart from '@/components/LiveTickChart';
+import TraderCam from '@/components/TraderCam';
+import MatchRecorder from '@/components/MatchRecorder';
 import { derivFeed } from '@/lib/deriv-feed';
 import { roomManager } from '@/lib/room-store';
 import { MarketTick, MatchRoom, SUPPORTED_SYMBOLS } from '@/lib/types';
@@ -88,8 +90,10 @@ export default function SpectatorStagePage() {
           </div>
         </div>
 
-        {/* Big Center Countdown Clock */}
+        {/* Big Center Countdown Clock & Recorder */}
         <div className="flex items-center gap-4">
+          <MatchRecorder matchTitle={room.title} isMatchEnded={room.status === 'ENDED'} />
+
           <div className="flex items-center gap-3 rounded-2xl border border-arena-700 bg-arena-900/90 px-6 py-2.5 font-mono shadow-2xl">
             <Clock className={`h-6 w-6 ${room.timeRemaining <= 30 && room.status === 'ACTIVE' ? 'text-rose-400 animate-spin' : 'text-emerald-400'}`} />
             <div className="flex flex-col">
@@ -115,9 +119,9 @@ export default function SpectatorStagePage() {
       {/* Main Broadcast Stage Content */}
       <div className="my-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center flex-1">
         {/* Corner A Stream Card (4 cols) */}
-        <div className="lg:col-span-4 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-b from-arena-900 to-arena-950 p-6 shadow-2xl relative overflow-hidden">
+        <div className="lg:col-span-4 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-b from-arena-900 to-arena-950 p-5 shadow-2xl relative overflow-hidden">
           {room.cornerA.isKnockedOut && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 p-4 text-center">
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90 p-4 text-center">
               <AlertOctagon className="h-12 w-12 text-rose-500 animate-bounce mb-2" />
               <span className="font-mono text-xl font-black text-rose-400 uppercase">
                 KNOCKED OUT
@@ -125,37 +129,48 @@ export default function SpectatorStagePage() {
             </div>
           )}
 
+          <div className="mb-3">
+            <TraderCam
+              traderName={room.cornerA.traderName}
+              corner="A"
+              isLocalUser={false}
+              isAiBot={true}
+              compact={true}
+              avatarSeed="👨‍💻"
+            />
+          </div>
+
           <div className="flex items-center justify-between pb-3 border-b border-arena-800">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-400 text-black font-black text-sm">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-400 text-black font-black text-xs">
                 A
               </span>
-              <span className="text-xl font-black">{room.cornerA.traderName}</span>
+              <span className="text-lg font-black">{room.cornerA.traderName}</span>
             </div>
             {room.winner === 'A' && (
-              <span className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-xs font-mono font-bold text-amber-300 border border-amber-400/40">
-                <Trophy className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-mono font-bold text-amber-300 border border-amber-400/40">
+                <Trophy className="h-3 w-3" />
                 WINNER
               </span>
             )}
           </div>
 
-          <div className="mt-4 space-y-3 font-mono">
+          <div className="mt-3 space-y-2.5 font-mono">
             <div className="flex justify-between items-baseline">
               <span className="text-xs text-arena-400 uppercase">Equity:</span>
-              <span className="text-2xl font-black text-emerald-400">
+              <span className="text-xl font-black text-emerald-400">
                 ${room.cornerA.equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="flex justify-between items-baseline">
               <span className="text-xs text-arena-400 uppercase">Net Pips:</span>
-              <span className="text-lg font-bold text-white">
+              <span className="text-base font-bold text-white">
                 {room.cornerA.netPips >= 0 ? '+' : ''}{room.cornerA.netPips.toFixed(1)} pips
               </span>
             </div>
 
-            <div className="space-y-1 pt-2">
+            <div className="space-y-1 pt-1">
               <div className="flex justify-between text-[11px] text-arena-400">
                 <span>Trailing Drawdown:</span>
                 <span className={room.cornerA.drawdownPercent > 10 ? 'text-rose-400 font-bold' : 'text-arena-200'}>
@@ -172,7 +187,7 @@ export default function SpectatorStagePage() {
           </div>
         </div>
 
-        {/* Center Live Tick Chart (4 cols) */}
+        {/* Center Live Candlestick / Tick Chart (4 cols) */}
         <div className="lg:col-span-4 h-full flex flex-col justify-center">
           <LiveTickChart
             symbol={room.symbol}
@@ -182,9 +197,9 @@ export default function SpectatorStagePage() {
         </div>
 
         {/* Corner B Stream Card (4 cols) */}
-        <div className="lg:col-span-4 rounded-2xl border-2 border-cyan-500/40 bg-gradient-to-b from-arena-900 to-arena-950 p-6 shadow-2xl relative overflow-hidden">
+        <div className="lg:col-span-4 rounded-2xl border-2 border-cyan-500/40 bg-gradient-to-b from-arena-900 to-arena-950 p-5 shadow-2xl relative overflow-hidden">
           {room.cornerB.isKnockedOut && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 p-4 text-center">
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90 p-4 text-center">
               <AlertOctagon className="h-12 w-12 text-rose-500 animate-bounce mb-2" />
               <span className="font-mono text-xl font-black text-rose-400 uppercase">
                 KNOCKED OUT
@@ -192,37 +207,48 @@ export default function SpectatorStagePage() {
             </div>
           )}
 
+          <div className="mb-3">
+            <TraderCam
+              traderName={room.cornerB.traderName}
+              corner="B"
+              isLocalUser={false}
+              isAiBot={true}
+              compact={true}
+              avatarSeed="⚡"
+            />
+          </div>
+
           <div className="flex items-center justify-between pb-3 border-b border-arena-800">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-400 text-black font-black text-sm">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-400 text-black font-black text-xs">
                 B
               </span>
-              <span className="text-xl font-black">{room.cornerB.traderName}</span>
+              <span className="text-lg font-black">{room.cornerB.traderName}</span>
             </div>
             {room.winner === 'B' && (
-              <span className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-xs font-mono font-bold text-amber-300 border border-amber-400/40">
-                <Trophy className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-mono font-bold text-amber-300 border border-amber-400/40">
+                <Trophy className="h-3 w-3" />
                 WINNER
               </span>
             )}
           </div>
 
-          <div className="mt-4 space-y-3 font-mono">
+          <div className="mt-3 space-y-2.5 font-mono">
             <div className="flex justify-between items-baseline">
               <span className="text-xs text-arena-400 uppercase">Equity:</span>
-              <span className="text-2xl font-black text-cyan-400">
+              <span className="text-xl font-black text-cyan-400">
                 ${room.cornerB.equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="flex justify-between items-baseline">
               <span className="text-xs text-arena-400 uppercase">Net Pips:</span>
-              <span className="text-lg font-bold text-white">
+              <span className="text-base font-bold text-white">
                 {room.cornerB.netPips >= 0 ? '+' : ''}{room.cornerB.netPips.toFixed(1)} pips
               </span>
             </div>
 
-            <div className="space-y-1 pt-2">
+            <div className="space-y-1 pt-1">
               <div className="flex justify-between text-[11px] text-arena-400">
                 <span>Trailing Drawdown:</span>
                 <span className={room.cornerB.drawdownPercent > 10 ? 'text-rose-400 font-bold' : 'text-arena-200'}>

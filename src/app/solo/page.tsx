@@ -6,6 +6,7 @@ import LiveTickChart from '@/components/LiveTickChart';
 import OrderPad from '@/components/OrderPad';
 import CornerCard from '@/components/CornerCard';
 import DerivModal from '@/components/DerivModal';
+import MatchRecorder from '@/components/MatchRecorder';
 import { derivFeed } from '@/lib/deriv-feed';
 import { roomManager } from '@/lib/room-store';
 import { MarketTick, MatchRoom, OrderSide, SUPPORTED_SYMBOLS, SymbolKey } from '@/lib/types';
@@ -100,21 +101,25 @@ export default function SoloArenaPage() {
             </div>
           </div>
 
-          {/* Symbol Quick Switcher */}
-          <div className="flex items-center gap-2 font-mono text-xs">
-            {(Object.keys(SUPPORTED_SYMBOLS) as SymbolKey[]).map((sym) => (
-              <button
-                key={sym}
-                onClick={() => setSymbol(sym)}
-                className={`rounded-lg px-2.5 py-1 transition font-bold ${
-                  symbol === sym
-                    ? 'bg-emerald-500 text-arena-950'
-                    : 'bg-arena-850 text-arena-400 hover:text-white'
-                }`}
-              >
-                {sym}
-              </button>
-            ))}
+          {/* Symbol Quick Switcher & Video Recorder */}
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <MatchRecorder matchTitle="Solo-Practice" isMatchEnded={false} />
+
+            <div className="flex items-center gap-1.5">
+              {(Object.keys(SUPPORTED_SYMBOLS) as SymbolKey[]).map((sym) => (
+                <button
+                  key={sym}
+                  onClick={() => setSymbol(sym)}
+                  className={`rounded-lg px-2.5 py-1 transition font-bold ${
+                    symbol === sym
+                      ? 'bg-emerald-500 text-arena-950'
+                      : 'bg-arena-850 text-arena-400 hover:text-white'
+                  }`}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
 
             <button
               onClick={() => initSolo(symbol)}
@@ -162,7 +167,7 @@ export default function SoloArenaPage() {
               Practice Tip:
             </span>
             <p className="text-[11px] leading-relaxed">
-              In competitive matches, dropping <strong>15% from your peak equity</strong> instantly knocks you out of the tournament. Practice scaling lot sizes to maintain positive expectancy without triggering the buzzer!
+              Use the <strong>1m, 2m, 3m, 5m, 15m</strong> timeframe tabs to analyze market structure before executing orders. Keep an eye on your peak drawdown meter in your corner cam!
             </p>
           </div>
         </div>
