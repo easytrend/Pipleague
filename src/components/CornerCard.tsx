@@ -9,6 +9,7 @@ interface CornerCardProps {
   corner: CornerState;
   symbol: SymbolKey;
   maxDrawdownPct: number;
+  maxDrawdownAmount?: number;
   isUserCorner?: boolean;
   onToggleMute?: () => void;
   onCloseTrade?: (tradeId: string) => void;
@@ -18,14 +19,17 @@ export default function CornerCard({
   corner,
   symbol,
   maxDrawdownPct,
+  maxDrawdownAmount = 600,
   isUserCorner = false,
   onCloseTrade,
 }: CornerCardProps) {
   const cfg = SUPPORTED_SYMBOLS[symbol];
   const isA = corner.corner === 'A';
 
-  const ddProgress = Math.min(100, (corner.drawdownPercent / maxDrawdownPct) * 100);
-  const isDangerDD = corner.drawdownPercent >= maxDrawdownPct * 0.75;
+  const maxLoss = maxDrawdownAmount || 600;
+  const currentLoss = corner.drawdownAmount ?? (corner.peakEquity > corner.equity ? corner.peakEquity - corner.equity : 0);
+  const lossProgress = Math.min(100, (currentLoss / maxLoss) * 100);
+  const isDangerLoss = currentLoss >= maxLoss * 0.75;
 
   return (
     <div
@@ -42,10 +46,10 @@ export default function CornerCard({
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-xl bg-arena-950/85 backdrop-blur-md p-4 text-center">
           <AlertOctagon className="h-10 w-10 text-rose-500 animate-bounce mb-2" />
           <span className="font-mono text-base font-black uppercase tracking-wider text-rose-400">
-            KNOCKED OUT
+            LIQUIDATED / KNOCKED OUT
           </span>
           <span className="mt-1 font-mono text-xs text-arena-400 max-w-xs">
-            Exceeded {maxDrawdownPct}% Trailing Drawdown Limit. All positions liquidated.
+            Loss reached ${currentLoss.toFixed(2)} (Exceeded ${maxLoss} Liquidation Limit). All positions force-closed.
           </span>
         </div>
       )}
@@ -112,15 +116,15 @@ export default function CornerCard({
         </div>
       </div>
 
-      {/* Knockout Drawdown Pressure Meter */}
+      {/* Knockout Drawdown / Liquidation Pressure Meter */}
       <div className="flex flex-col gap-1.5 py-3 border-b border-arena-800/80 font-mono">
         <div className="flex items-center justify-between text-[11px]">
           <span className="flex items-center gap-1 text-arena-400">
-            <ShieldAlert className={`h-3.5 w-3.5 ${isDangerDD ? 'text-rose-400 animate-pulse' : 'text-arena-400'}`} />
-            Peak Drawdown:
+            <ShieldAlert className={`h-3.5 w-3.5 ${isDangerLoss ? 'text-rose-400 animate-pulse' : 'text-arena-400'}`} />
+            Liquidation Risk:
           </span>
-          <span className={`font-bold ${isDangerDD ? 'text-rose-400 font-black' : 'text-white'}`}>
-            {corner.drawdownPercent.toFixed(1)}% / {maxDrawdownPct}% Limit
+          <span className={`font-bold ${isDangerLoss ? 'text-rose-400 font-black' : 'text-white'}`}>
+            ${currentLoss.toFixed(2)} / ${maxLoss.toFixed(2)} ({lossProgress.toFixed(1)}%)
           </span>
         </div>
 
@@ -128,10 +132,15 @@ export default function CornerCard({
         <div className="h-2 w-full rounded-full bg-arena-800 overflow-hidden">
           <div
             className={`h-full transition-all duration-200 ${
-              isDangerDD ? 'bg-rose-500 animate-pulse' : corner.drawdownPercent > 5 ? 'bg-amber-400' : 'bg-emerald-400'
+              isDangerLoss ? 'bg-rose-500 animate-pulse' : currentLoss > 200 ? 'bg-amber-400' : 'bg-emerald-400'
             }`}
-            style={{ width: `${ddProgress}%` }}
+            style={{ width: `${lossProgress}%` }}
           />
+        </div>
+
+        <div className="flex items-center justify-between text-[9px] text-arena-500">
+          <span>Buffer: ${Math.max(0, maxLoss - currentLoss).toFixed(2)}</span>
+          <span className="text-rose-400/80">Liquidates at &gt;${maxLoss}</span>
         </div>
       </div>
 

@@ -26,7 +26,7 @@ class DerivFeedService {
       'EUR/USD': { quote: 1.09350, spread: 0.00008 },
       'GBP/USD': { quote: 1.29420, spread: 0.00012 },
       'USD/JPY': { quote: 154.650, spread: 0.012 },
-      'XAU/USD': { quote: 3668.50, spread: 0.35 },
+      'XAU/USD': { quote: 2658.50, spread: 0.05 },
       'Volatility 100': { quote: 1708.50, spread: 0.40 },
     };
 

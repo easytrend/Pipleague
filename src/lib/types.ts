@@ -72,8 +72,8 @@ export const SUPPORTED_SYMBOLS: Record<SymbolKey, SymbolConfig> = {
     digits: 2,
     pipScale: 0.1,
     pipMultiplier: 10,
-    defaultSpreadPips: 2.5,
-    contractSize: 100,
+    defaultSpreadPips: 0.5,
+    contractSize: 10,
   },
   'Volatility 100': {
     key: 'Volatility 100',
@@ -133,6 +133,7 @@ export interface CornerState {
   realizedPnl: number;
   netPips: number;
   drawdownPercent: number; // 0 to 100%
+  drawdownAmount: number; // Cumulative drawdown/loss in USD
   isKnockedOut: boolean;
   eliminatedAt?: number;
   openTrades: TradePosition[];
@@ -148,6 +149,7 @@ export interface MatchRoom {
   status: MatchStatus;
   startingBalance: number;
   maxDrawdownPct: number; // e.g. 15 (means 15% drop from peak equity = knockout)
+  maxDrawdownAmount: number; // e.g. 600 ($600 max loss liquidation threshold)
   durationSeconds: number; // e.g. 300 (5m), 900 (15m), 1800 (30m)
   timeRemaining: number;
   startedAt?: number;

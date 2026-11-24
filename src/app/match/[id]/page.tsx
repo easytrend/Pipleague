@@ -35,6 +35,7 @@ export default function MatchArenaPage() {
         startingBalance: 10000,
         durationSeconds: 300,
         maxDrawdownPct: 15,
+        maxDrawdownAmount: 600,
       });
     }
     setRoom({ ...r });
@@ -148,8 +149,8 @@ export default function MatchArenaPage() {
                 <span className="rounded bg-arena-800 px-2 py-0.5 font-mono text-[10px] text-arena-300">
                   {room.symbol}
                 </span>
-                <span className="rounded bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 font-mono text-[10px] text-rose-400">
-                  {room.maxDrawdownPct}% Max DD Knockout
+                <span className="rounded bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 font-mono text-[10px] text-rose-400 font-bold">
+                  Over $600 Loss = Liquidation
                 </span>
               </div>
               <p className="font-mono text-xs text-arena-400">
@@ -282,6 +283,7 @@ export default function MatchArenaPage() {
             corner={room.cornerA}
             symbol={room.symbol}
             maxDrawdownPct={room.maxDrawdownPct}
+            maxDrawdownAmount={room.maxDrawdownAmount || 600}
             isUserCorner={activeCorner === 'A'}
             onCloseTrade={handleCloseTrade}
           />
@@ -291,6 +293,7 @@ export default function MatchArenaPage() {
             corner={room.cornerB}
             symbol={room.symbol}
             maxDrawdownPct={room.maxDrawdownPct}
+            maxDrawdownAmount={room.maxDrawdownAmount || 600}
             isUserCorner={activeCorner === 'B'}
             onCloseTrade={handleCloseTrade}
           />
@@ -304,7 +307,8 @@ export default function MatchArenaPage() {
             <ul className="list-disc list-inside space-y-1 text-[11px]">
               <li>Timeframes: Switch between <strong>1m, 2m, 3m, 5m, 15m</strong> candlesticks or Tick Wave directly on the chart.</li>
               <li>Camera &amp; Voice: Toggle your webcam and mic in your corner to talk, banter, and react in real-time.</li>
-              <li>Discipline Rule: <strong>{room.maxDrawdownPct}% peak drawdown</strong> triggers automatic buzzer knockout.</li>
+              <li>1-Click Trading: <strong>0.01 lot safe default</strong> with instant 1-click execution.</li>
+              <li>Liquidation Rule: Cumulative loss <strong>over $600.00</strong> triggers immediate liquidation and buzzer knockout.</li>
             </ul>
           </div>
         </div>

@@ -27,6 +27,7 @@ export default function SpectatorStagePage() {
         startingBalance: 10000,
         durationSeconds: 300,
         maxDrawdownPct: 15,
+        maxDrawdownAmount: 600,
       });
     }
     setRoom({ ...r });
@@ -172,15 +173,15 @@ export default function SpectatorStagePage() {
 
             <div className="space-y-1 pt-1">
               <div className="flex justify-between text-[11px] text-arena-400">
-                <span>Trailing Drawdown:</span>
-                <span className={room.cornerA.drawdownPercent > 10 ? 'text-rose-400 font-bold' : 'text-arena-200'}>
-                  {room.cornerA.drawdownPercent.toFixed(1)}% / {room.maxDrawdownPct}% Limit
+                <span>Loss &amp; Liquidation:</span>
+                <span className={room.cornerA.drawdownAmount > 450 ? 'text-rose-400 font-bold animate-pulse' : 'text-arena-200'}>
+                  ${room.cornerA.drawdownAmount.toFixed(2)} / ${room.maxDrawdownAmount || 600} Limit
                 </span>
               </div>
               <div className="h-2 w-full rounded-full bg-arena-800 overflow-hidden">
                 <div
-                  className="h-full bg-emerald-400 transition-all duration-300"
-                  style={{ width: `${Math.min(100, (room.cornerA.drawdownPercent / room.maxDrawdownPct) * 100)}%` }}
+                  className={`h-full transition-all duration-300 ${room.cornerA.drawdownAmount > 450 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`}
+                  style={{ width: `${Math.min(100, (room.cornerA.drawdownAmount / (room.maxDrawdownAmount || 600)) * 100)}%` }}
                 />
               </div>
             </div>
@@ -250,15 +251,15 @@ export default function SpectatorStagePage() {
 
             <div className="space-y-1 pt-1">
               <div className="flex justify-between text-[11px] text-arena-400">
-                <span>Trailing Drawdown:</span>
-                <span className={room.cornerB.drawdownPercent > 10 ? 'text-rose-400 font-bold' : 'text-arena-200'}>
-                  {room.cornerB.drawdownPercent.toFixed(1)}% / {room.maxDrawdownPct}% Limit
+                <span>Loss &amp; Liquidation:</span>
+                <span className={room.cornerB.drawdownAmount > 450 ? 'text-rose-400 font-bold animate-pulse' : 'text-arena-200'}>
+                  ${room.cornerB.drawdownAmount.toFixed(2)} / ${room.maxDrawdownAmount || 600} Limit
                 </span>
               </div>
               <div className="h-2 w-full rounded-full bg-arena-800 overflow-hidden">
                 <div
-                  className="h-full bg-cyan-400 transition-all duration-300"
-                  style={{ width: `${Math.min(100, (room.cornerB.drawdownPercent / room.maxDrawdownPct) * 100)}%` }}
+                  className={`h-full transition-all duration-300 ${room.cornerB.drawdownAmount > 450 ? 'bg-rose-500 animate-pulse' : 'bg-cyan-400'}`}
+                  style={{ width: `${Math.min(100, (room.cornerB.drawdownAmount / (room.maxDrawdownAmount || 600)) * 100)}%` }}
                 />
               </div>
             </div>
@@ -274,7 +275,7 @@ export default function SpectatorStagePage() {
           <span>EUR/USD &bull; GBP/USD &bull; USD/JPY &bull; XAU/USD (GOLD) &bull; VOLATILITY 100</span>
         </div>
         <div>
-          Discipline Rule: <strong>{room.maxDrawdownPct}% Peak Drawdown Knockout</strong>
+          Discipline Rule: <strong>Over $600 Loss triggers instant liquidation knockout</strong>
         </div>
       </div>
     </div>

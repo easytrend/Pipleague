@@ -17,6 +17,7 @@ export class RoomManager {
       status: 'LOBBY',
       startingBalance: 10000,
       maxDrawdownPct: 15,
+      maxDrawdownAmount: 600,
       durationSeconds: 300, // 5 min blitz
       timeRemaining: 300,
       spectatorCount: 42,
@@ -42,6 +43,7 @@ export class RoomManager {
       realizedPnl: 0,
       netPips: 0,
       drawdownPercent: 0,
+      drawdownAmount: 0,
       isKnockedOut: false,
       openTrades: [],
       closedTrades: [],
@@ -58,6 +60,7 @@ export class RoomManager {
     startingBalance: number;
     durationSeconds: number;
     maxDrawdownPct: number;
+    maxDrawdownAmount?: number;
     traderAName?: string;
     traderBName?: string;
   }): MatchRoom {
@@ -69,6 +72,7 @@ export class RoomManager {
       status: 'LOBBY',
       startingBalance: params.startingBalance,
       maxDrawdownPct: params.maxDrawdownPct,
+      maxDrawdownAmount: params.maxDrawdownAmount || 600,
       durationSeconds: params.durationSeconds,
       timeRemaining: params.durationSeconds,
       spectatorCount: 1,
@@ -208,10 +212,14 @@ export class RoomManager {
       totalFloating += trade.pnl;
       totalNetPips += trade.pips;
 
-      // Auto TP / SL execution
+      // Auto TP / SL execution & single-trade liquidation limit
+      const maxLoss = room.maxDrawdownAmount || 600;
       if (trade.tpPips && trade.pips >= trade.tpPips) {
         setTimeout(() => this.closeTrade(room.id, trade.id, tick), 0);
       } else if (trade.slPips && trade.pips <= -trade.slPips) {
+        setTimeout(() => this.closeTrade(room.id, trade.id, tick), 0);
+      } else if (trade.pnl <= -maxLoss) {
+        // Individual position liquidation if single trade loss reaches threshold
         setTimeout(() => this.closeTrade(room.id, trade.id, tick), 0);
       }
     });
@@ -224,10 +232,14 @@ export class RoomManager {
       cornerState.peakEquity = cornerState.equity;
     }
 
-    // Drawdown from peak equity
+    // Cumulative drawdown & loss amount calculation
+    const lossFromPeak = Math.max(0, cornerState.peakEquity - cornerState.equity);
+    const lossFromStart = Math.max(0, cornerState.startingBalance - cornerState.equity);
+    const totalCurrentLoss = Math.max(lossFromPeak, lossFromStart, -cornerState.floatingPnl);
+    cornerState.drawdownAmount = Number(totalCurrentLoss.toFixed(2));
+
     if (cornerState.peakEquity > 0) {
-      const ddAmount = cornerState.peakEquity - cornerState.equity;
-      const ddPct = Math.max(0, (ddAmount / cornerState.peakEquity) * 100);
+      const ddPct = Math.max(0, (lossFromPeak / cornerState.peakEquity) * 100);
       cornerState.drawdownPercent = Number(ddPct.toFixed(2));
     }
   }
@@ -237,13 +249,19 @@ export class RoomManager {
     const cornerState = corner === 'A' ? room.cornerA : room.cornerB;
     const opponent = corner === 'A' ? room.cornerB : room.cornerA;
 
-    if (!cornerState.isKnockedOut && cornerState.drawdownPercent >= room.maxDrawdownPct) {
+    const maxLoss = room.maxDrawdownAmount || 600;
+    const isOverLossLimit = cornerState.drawdownAmount >= maxLoss;
+    const isOverPctLimit = cornerState.drawdownPercent >= room.maxDrawdownPct;
+
+    if (!cornerState.isKnockedOut && (isOverLossLimit || isOverPctLimit)) {
       cornerState.isKnockedOut = true;
       cornerState.eliminatedAt = Date.now();
-      cornerState.openTrades = []; // Force liquidate
+      cornerState.openTrades = []; // Force liquidate all positions
       room.status = 'ENDED';
       room.winner = opponent.corner;
-      room.knockoutReason = `${cornerState.traderName} exceeded ${room.maxDrawdownPct}% Max Drawdown (Knockout)`;
+      room.knockoutReason = isOverLossLimit
+        ? `${cornerState.traderName} LIQUIDATED: Loss reached $${cornerState.drawdownAmount.toFixed(2)} (Exceeded $${maxLoss} limit)`
+        : `${cornerState.traderName} exceeded ${room.maxDrawdownPct}% Max Drawdown (Knockout)`;
       sound.playKnockoutBuzzer();
     }
   }

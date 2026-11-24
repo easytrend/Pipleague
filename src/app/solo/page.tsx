@@ -26,6 +26,7 @@ export default function SoloArenaPage() {
       startingBalance: 10000,
       durationSeconds: 900,
       maxDrawdownPct: 15,
+      maxDrawdownAmount: 600,
       traderAName: 'Solo_Trader',
       traderBName: 'Benchmark Bot',
     });
@@ -157,6 +158,7 @@ export default function SoloArenaPage() {
             corner={room.cornerA}
             symbol={symbol}
             maxDrawdownPct={room.maxDrawdownPct}
+            maxDrawdownAmount={room.maxDrawdownAmount || 600}
             isUserCorner={true}
             onCloseTrade={handleCloseTrade}
           />
@@ -164,10 +166,10 @@ export default function SoloArenaPage() {
           <div className="rounded-xl border border-arena-800 bg-arena-900/40 p-4 font-mono text-xs text-arena-400 space-y-2">
             <span className="font-bold text-arena-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-emerald-400" />
-              Practice Tip:
+              Practice Rules:
             </span>
             <p className="text-[11px] leading-relaxed">
-              Use the <strong>1m, 2m, 3m, 5m, 15m</strong> timeframe tabs to analyze market structure before executing orders. Keep an eye on your peak drawdown meter in your corner cam!
+              Default order size is <strong>0.01 lot</strong> with 1-click execution. Cumulative loss <strong>over $600.00</strong> will trigger instant liquidation. Use <strong>1m, 2m, 3m, 5m, 15m</strong> timeframe tabs to time your entries.
             </p>
           </div>
         </div>

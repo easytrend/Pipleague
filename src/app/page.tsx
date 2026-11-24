@@ -101,7 +101,7 @@ export default function HomePage() {
                 London Open Sprint #882
               </h2>
               <p className="text-xs text-arena-400 font-mono mt-0.5">
-                EUR/USD &bull; $10,000 Paper Bankroll &bull; 15% Max Drawdown Knockout
+                EUR/USD &bull; $10,000 Paper Bankroll &bull; Over $600 Liquidation &bull; 0.01L 1-Click
               </p>
             </div>
 
@@ -185,9 +185,9 @@ export default function HomePage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 mb-4 border border-rose-500/20">
               <ShieldAlert className="h-5 w-5" />
             </div>
-            <h3 className="text-base font-bold text-white">15% Knockout Drawdown</h3>
+            <h3 className="text-base font-bold text-white">Over $600 Liquidation Knockout</h3>
             <p className="mt-2 text-xs text-arena-400 leading-relaxed">
-              No reckless 100x YOLO gambles. Drop 15% below your peak equity and the server triggers an immediate buzzer liquidation. Discipline counts as much as profit.
+              No reckless 100x YOLO gambles. Total loss over $600 triggers an immediate buzzer liquidation and closes all positions. Discipline counts as much as profit.
             </p>
           </div>
 

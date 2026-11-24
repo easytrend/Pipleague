@@ -18,6 +18,7 @@ export default function HostPage() {
   const [startingBalance, setStartingBalance] = useState<number>(10000);
   const [durationSeconds, setDurationSeconds] = useState<number>(300);
   const [maxDrawdownPct, setMaxDrawdownPct] = useState<number>(15);
+  const [maxDrawdownAmount, setMaxDrawdownAmount] = useState<number>(600);
   const [traderAName, setTraderAName] = useState('Alpha_Trader');
   const [traderBName, setTraderBName] = useState('Pip_Hunter');
 
@@ -32,6 +33,7 @@ export default function HostPage() {
       startingBalance,
       durationSeconds,
       maxDrawdownPct,
+      maxDrawdownAmount,
       traderAName,
       traderBName,
     });
@@ -165,24 +167,24 @@ export default function HostPage() {
                 </div>
               </div>
 
-              {/* Drawdown Knockout */}
+              {/* Liquidation Cap */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold uppercase text-arena-300">
-                  Knockout Drawdown
+                  Liquidation Max Loss Cap
                 </label>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {[10, 15, 20].map((dd) => (
+                  {[300, 600, 1000].map((amt) => (
                     <button
-                      key={dd}
+                      key={amt}
                       type="button"
-                      onClick={() => setMaxDrawdownPct(dd)}
+                      onClick={() => setMaxDrawdownAmount(amt)}
                       className={`rounded-lg py-2 text-xs font-bold transition border ${
-                        maxDrawdownPct === dd
-                          ? 'border-rose-500 bg-rose-500/20 text-rose-400'
+                        maxDrawdownAmount === amt
+                          ? 'border-rose-500 bg-rose-500/20 text-rose-400 font-black'
                           : 'border-arena-800 bg-arena-900 text-arena-400 hover:text-white'
                       }`}
                     >
-                      {dd}%
+                      ${amt} {amt === 600 && '⭐'}
                     </button>
                   ))}
                 </div>
